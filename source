@@ -1,0 +1,238 @@
+-- LocalScript (StarterPlayerScripts나 ScreenGui 안에 넣어 사용)
+-- 검정 + 빨강 미니멀 실행기 + 출력창 (print/warn/error 캡처)
+
+local player = game.Players.LocalPlayer
+local LogService = game:GetService("LogService")
+
+local function safeExecute(code)
+    local success, result = pcall(function()
+        local func, err = loadstring(code)
+        if not func then error("loadstring 실패: " .. tostring(err)) end
+        func()
+    end)
+    
+    if not success then
+        warn("실행 오류: " .. tostring(result))
+        return false, tostring(result)
+    end
+    
+    return true, "실행 성공"
+end
+
+-- GUI 생성
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "ExecutorGui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = game.CoreGui
+
+local uiScale = Instance.new("UIScale")
+uiScale.Scale = 0.85
+uiScale.Parent = ScreenGui
+
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 460, 0, 420)
+Frame.Position = UDim2.new(0.5, -230, 0.5, -210)
+Frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+Frame.BorderColor3 = Color3.fromRGB(255, 0, 0)
+Frame.BorderSizePixel = 1
+Frame.Active = true
+Frame.Draggable = true
+Frame.Parent = ScreenGui
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+Title.BorderColor3 = Color3.fromRGB(255, 0, 0)
+Title.BorderSizePixel = 1
+Title.Text = "실행기"
+Title.TextColor3 = Color3.fromRGB(255, 0, 0)
+Title.Font = Enum.Font.Gotham
+Title.TextSize = 22
+Title.Parent = Frame
+
+local CloseButton = Instance.new("TextButton")
+CloseButton.Size = UDim2.new(0, 32, 0, 32)
+CloseButton.Position = UDim2.new(1, -37, 0, 4)
+CloseButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+CloseButton.BorderColor3 = Color3.fromRGB(255, 0, 0)
+CloseButton.BorderSizePixel = 1
+CloseButton.Text = "X"
+CloseButton.TextColor3 = Color3.fromRGB(255, 0, 0)
+CloseButton.Font = Enum.Font.Gotham
+CloseButton.TextSize = 20
+CloseButton.Parent = Frame
+
+CloseButton.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
+end)
+
+-- 코드 입력창
+local TextBox = Instance.new("TextBox")
+TextBox.Size = UDim2.new(1, -20, 0, 120)
+TextBox.Position = UDim2.new(0, 10, 0, 50)
+TextBox.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+TextBox.BorderColor3 = Color3.fromRGB(255, 0, 0)
+TextBox.BorderSizePixel = 1
+TextBox.TextColor3 = Color3.fromRGB(255, 0, 0)
+TextBox.PlaceholderText = "-- 코드 붙여넣기 --"
+TextBox.PlaceholderColor3 = Color3.fromRGB(180, 0, 0)
+TextBox.Font = Enum.Font.Gotham
+TextBox.TextSize = 14
+TextBox.MultiLine = true
+TextBox.TextXAlignment = Enum.TextXAlignment.Left
+TextBox.TextYAlignment = Enum.TextYAlignment.Top
+TextBox.ClearTextOnFocus = false
+TextBox.TextWrapped = true
+TextBox.Text = [[
+-- 예시
+print("테스트 출력")
+warn("경고 메시지")
+error("에러 테스트")
+]]
+TextBox.Parent = Frame
+
+-- 출력창 (ScrollingFrame + 자동 줄 추가)
+local OutputFrame = Instance.new("ScrollingFrame")
+OutputFrame.Size = UDim2.new(1, -20, 0, 180)
+OutputFrame.Position = UDim2.new(0, 10, 0, 180)  -- 입력창 아래
+OutputFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+OutputFrame.BorderColor3 = Color3.fromRGB(255, 0, 0)
+OutputFrame.BorderSizePixel = 1
+OutputFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+OutputFrame.ScrollBarThickness = 4
+OutputFrame.ScrollBarImageColor3 = Color3.fromRGB(255, 0, 0)
+OutputFrame.Parent = Frame
+
+local OutputLayout = Instance.new("UIListLayout")
+OutputLayout.Padding = UDim.new(0, 2)
+OutputLayout.SortOrder = Enum.SortOrder.LayoutOrder
+OutputLayout.Parent = OutputFrame
+
+-- 출력 라인 추가 함수
+local function addOutputLine(message, color)
+    local line = Instance.new("TextLabel")
+    line.Size = UDim2.new(1, -10, 0, 20)
+    line.BackgroundTransparency = 1
+    line.Text = message
+    line.TextColor3 = color or Color3.fromRGB(255, 255, 255)
+    line.TextXAlignment = Enum.TextXAlignment.Left
+    line.TextYAlignment = Enum.TextYAlignment.Center
+    line.Font = Enum.Font.Code
+    line.TextSize = 13
+    line.TextWrapped = true
+    line.Parent = OutputFrame
+    
+    -- 자동 CanvasSize 업데이트
+    OutputFrame.CanvasSize = UDim2.new(0, 0, 0, OutputLayout.AbsoluteContentSize.Y + 10)
+    
+    -- 자동 스크롤 다운
+    OutputFrame.CanvasPosition = Vector2.new(0, OutputFrame.AbsoluteCanvasSize.Y)
+end
+
+-- Roblox 출력 캡처 (print, warn, error 등)
+LogService.MessageOut:Connect(function(message, messageType)
+    local color = Color3.fromRGB(255, 255, 255)  -- 기본 흰색 (print)
+    
+    if messageType == Enum.MessageType.MessageWarning then
+        color = Color3.fromRGB(255, 215, 0)  -- 노랑 (warn)
+    elseif messageType == Enum.MessageType.MessageError then
+        color = Color3.fromRGB(255, 80, 80)  -- 빨강 (error)
+    end
+    
+    addOutputLine(message, color)
+end)
+
+-- 버튼 영역
+local ButtonFrame = Instance.new("Frame")
+ButtonFrame.Size = UDim2.new(1, -20, 0, 38)
+ButtonFrame.Position = UDim2.new(0, 10, 1, -50)
+ButtonFrame.BackgroundTransparency = 1
+ButtonFrame.Parent = Frame
+
+local ExecuteBtn = Instance.new("TextButton")
+ExecuteBtn.Size = UDim2.new(0.48, 0, 1, 0)
+ExecuteBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+ExecuteBtn.BorderColor3 = Color3.fromRGB(255, 0, 0)
+ExecuteBtn.BorderSizePixel = 1
+ExecuteBtn.Text = "실행"
+ExecuteBtn.TextColor3 = Color3.fromRGB(255, 0, 0)
+ExecuteBtn.Font = Enum.Font.Gotham
+ExecuteBtn.TextSize = 18
+ExecuteBtn.Parent = ButtonFrame
+
+local ClearBtn = Instance.new("TextButton")
+ClearBtn.Size = UDim2.new(0.48, 0, 1, 0)
+ClearBtn.Position = UDim2.new(0.52, 0, 0, 0)
+ClearBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+ClearBtn.BorderColor3 = Color3.fromRGB(255, 0, 0)
+ClearBtn.BorderSizePixel = 1
+ClearBtn.Text = "지우기"
+ClearBtn.TextColor3 = Color3.fromRGB(255, 0, 0)
+ClearBtn.Font = Enum.Font.Gotham
+ClearBtn.TextSize = 18
+ClearBtn.Parent = ButtonFrame
+
+-- 결과 라벨 (작은 상태 표시용)
+local ResultLabel = Instance.new("TextLabel")
+ResultLabel.Size = UDim2.new(1, -20, 0, 28)
+ResultLabel.Position = UDim2.new(0, 10, 1, -85)
+ResultLabel.BackgroundTransparency = 1
+ResultLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+ResultLabel.Text = "준비됨. . ."
+ResultLabel.TextSize = 14
+ResultLabel.Font = Enum.Font.Gotham
+ResultLabel.TextXAlignment = Enum.TextXAlignment.Left
+ResultLabel.Parent = Frame
+
+-- 출력창 클리어 버튼 (추가 옵션)
+local ClearOutputBtn = Instance.new("TextButton")
+ClearOutputBtn.Size = UDim2.new(0.3, 0, 0, 25)
+ClearOutputBtn.Position = UDim2.new(0.7, 0, 0, -30)  -- 출력창 위쪽 오른쪽
+ClearOutputBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+ClearOutputBtn.BorderColor3 = Color3.fromRGB(255, 0, 0)
+ClearOutputBtn.BorderSizePixel = 1
+ClearOutputBtn.Text = "출력 지우기"
+ClearOutputBtn.TextColor3 = Color3.fromRGB(255, 0, 0)
+ClearOutputBtn.Font = Enum.Font.Gotham
+ClearOutputBtn.TextSize = 14
+ClearOutputBtn.Parent = Frame
+
+ClearOutputBtn.MouseButton1Click:Connect(function()
+    for _, child in ipairs(OutputFrame:GetChildren()) do
+        if child:IsA("TextLabel") then
+            child:Destroy()
+        end
+    end
+    OutputFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    ResultLabel.Text = "출력이 지워짐"
+end)
+
+-- 직접 코드 실행
+ExecuteBtn.MouseButton1Click:Connect(function()
+    local code = TextBox.Text
+    if code == "" or code:match("^%s*$") then
+        ResultLabel.Text = "코드가 없음"
+        return
+    end
+    
+    ResultLabel.Text = "실행 중. . ."
+    
+    task.spawn(function()
+        local ok, msg = safeExecute(code)
+        if ok then
+            ResultLabel.Text = "실행 완료"
+        else
+            ResultLabel.Text = "오류: " .. msg:sub(1, 50) .. "..."
+        end
+    end)
+end)
+
+ClearBtn.MouseButton1Click:Connect(function()
+    TextBox.Text = ""
+    ResultLabel.Text = "코드가 지워짐"
+end)
+
+-- 초기 메시지
+addOutputLine("출력창 준비됨. . . print/warn/error가 여기로 옵니다", Color3.fromRGB(100, 255, 100))
+
+print("실행기 + 출력창 로드 완료")
